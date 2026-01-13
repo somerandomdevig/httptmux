@@ -1,0 +1,32 @@
+{
+  "name": "httptmux",
+  "version": "1.0.11",
+  "description": "httptmux is an interactive CLI tool for API requests. Originally made for Termux (hence the name), but decided to make a second index.js file for desktops",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "httptmux": "./index.js",
+    "httptmuxd": "./index_desktop.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "inquirer": "^9.0.0",
+    "chalk": "^5.3.0"
+  },
+  "license": "MIT",
+  "keywords": [
+      "http",
+      "cli",
+      "termux",
+      "desktop",
+      "api",
+      "requests",
+      "axios",
+      "interactive",
+      "jwt",
+      "developer-tools",
+      "nodejs",
+      "command-line",
+      "automation"
+    ]
+}
