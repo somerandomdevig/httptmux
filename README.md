@@ -51,4 +51,4 @@ Menu options:
 
 License
 
-MIT © 2026 somerandondevig
+MIT © 2026 somerandondevig (somerandomdevig is my GitHub username, somerandondevig is my npm username)
