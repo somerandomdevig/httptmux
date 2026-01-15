@@ -4,7 +4,7 @@
 ![npm downloads](https://img.shields.io/npm/dw/httptmux)
 ![npm total downloads](https://img.shields.io/npm/dt/httptmux)
 
-An interactive CLI tool originally meant for termux but now extended to desktops with support for JWT requests
+An interactive CLI tool originally meant for termux but now extended to desktops with support for JWT requests (now with better error handling, JWT expiry awareness and improved history management!)
 
 ## Installation
 
@@ -42,6 +42,9 @@ Menu options:
 - View history
 - Re-run fron history
 - Search history
+- Clear history
+- Export history
+- Filter history
 - Set JWT token
 - Help
 - Version

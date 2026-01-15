@@ -25,3 +25,5 @@ v1.0.10 (13/1/2026): Fixed a typo in CHANGELOG.md
 v1.0.11 (13/1/2026): Documented v1.0.10
 
 v1.0.12 (13/1/2026): Added repository, bugs and homepage section to NPM package page
+
+v1.1.0 (15/1/2026): Added JWT expiry awareness, better error handling and better history management (clear, export, filter)
