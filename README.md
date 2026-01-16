@@ -3,9 +3,7 @@
 ![npm version](https://img.shields.io/npm/v/httptmux)
 ![npm downloads](https://img.shields.io/npm/dw/httptmux)
 ![npm total downloads](https://img.shields.io/npm/dt/httptmux)
-
 [![install size](https://packagephobia.com/badge?p=httptmux)](https://packagephobia.com/result?p=httptmux)
-
 ![GitHub repo size](https://img.shields.io/github/repo-size/somerandomdevig/httptmux)
 
 An interactive CLI tool originally meant for termux but now extended to desktops with support for JWT requests (now with better error handling, JWT expiry awareness and improved history management!)

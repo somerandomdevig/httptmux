@@ -1,6 +1,6 @@
 {
   "name": "httptmux",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "httptmux is an interactive CLI tool for API requests. Originally made for Termux (hence the name), but decided to make a second index.js file for desktops",
   "repository": {
     "type": "git",
