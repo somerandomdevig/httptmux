@@ -31,3 +31,5 @@ v1.1.0 (15/1/2026): Added JWT expiry awareness, better error handling and better
 v1.1.1 (16/1/2026): Added more badges to README.md
 
 v1.1.2 (16/1/2026): Changed README.md badge layout
+
+v1.2.0 (19/1/2026): Added non-interactive mode and PATCH, HEAD and OPTIONS support

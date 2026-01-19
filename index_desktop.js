@@ -5,14 +5,16 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import minimist from 'minimist';
 
 // Load package.json for version info
 import pkg from "./package.json" with { type: "json" };
 
 // CLI flags
-const verbose = process.argv.includes("--verbose");
-const showHelp = process.argv.includes("--help");
-const showVersion = process.argv.includes("--version");
+const args = minimist(process.argv.slice(2));
+const verbose = args.verbose || args.v;
+const showHelp = args.help || args.h === true;
+const showVersion = args.version || args.V === true;
 
 // Config paths
 const historyFile = path.join(os.homedir(), ".api-cli-history.json");
@@ -26,25 +28,25 @@ function logVerbose(message) {
 function printHelp() {
   console.log(chalk.cyan("\nhttptmux CLI Help"));
   console.log(`
-Usage: httptmux [options]
+Usage:
+  httptmux METHOD -u <url> [-h <headers>] [-b <body>]
+  httptmux -c
+  httptmux -e <file>
+  httptmux -f "status=200 since=YYYY-MM-DD"
 
-Options:
-  --help       Show this help message
-  --version    Show version number
-  --verbose    Enable verbose logging
+Methods:
+  GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS
 
-Interactive Menu Options:
-  • Make new request
-  • View history
-  • Re-run from history
-  • Search history
-  • Clear history
-  • Export history
-  • Filter history
-  • Set JWT token
-  • Help
-  • Version
-  • Exit
+Flags:
+  -u, --url             API URL
+  -h, --headers         Headers as JSON string
+  -b, --body            Body as JSON string
+  -c, --clear-history   Clear request history
+  -e, --export-history  Export history to file
+  -f, --filter-history  Filter history (status=XXX since=YYYY-MM-DD)
+  -v, --verbose         Enable verbose logging
+  -V, --version         Show version
+  --help                Show help
 `);
 }
 
@@ -75,14 +77,8 @@ function exportHistory(filePath = path.join(os.homedir(), "httptmux-history-expo
   fs.writeFileSync(filePath, JSON.stringify(history, null, 2));
   console.log(chalk.green(`History exported to ${filePath}`));
 }
-async function filterHistoryPrompt() {
-  const history = loadHistory();
-  if (history.length === 0) return console.log(chalk.yellow("No history found."));
-  const { status, since } = await inquirer.prompt([
-    { type: "input", name: "status", message: chalk.blue("Filter by status code (or leave empty):") },
-    { type: "input", name: "since", message: chalk.blue("Filter by date (YYYY-MM-DD or leave empty):") }
-  ]);
-  let results = history;
+function filterHistory(status, since) {
+  let results = loadHistory();
   if (status) results = results.filter(e => String(e.status) === status);
   if (since) results = results.filter(e => new Date(e.timestamp) >= new Date(since));
   if (results.length === 0) return console.log(chalk.yellow("No matching entries."));
@@ -150,8 +146,16 @@ async function executeRequest({ method, url, headers, body }) {
     const response = await axios({ method, url, headers, data: body });
     const duration = Date.now() - start;
 
-    console.log(chalk.green("\nResponse received:"));
-    console.log(chalk.gray(JSON.stringify(response.data, null, 2)));
+    if (method === "HEAD") {
+      console.log(chalk.green("\nResponse headers:"));
+      console.log(chalk.gray(JSON.stringify(response.headers, null, 2)));
+    } else if (method === "OPTIONS") {
+      console.log(chalk.green("\nAllowed methods:"));
+      console.log(chalk.gray(response.headers.allow || JSON.stringify(response.headers, null, 2)));
+    } else {
+      console.log(chalk.green("\nResponse received:"));
+      console.log(chalk.gray(JSON.stringify(response.data, null, 2)));
+    }
 
     logVerbose(`Request completed in ${duration} ms`);
     logVerbose(`Status code: ${response.status}`);
@@ -165,13 +169,15 @@ async function executeRequest({ method, url, headers, body }) {
   }
 }
 
-// Prompt user for new request
+// Interactive request
 async function runRequest() {
-  const { method } = await inquirer.prompt([{ type: "list", name: "method", message: chalk.blue("Select HTTP method:"), choices: ["GET", "POST", "PUT", "DELETE"] }]);
+  const { method } = await inquirer.prompt([
+    { type: "list", name: "method", message: chalk.blue("Select HTTP method:"), choices: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] }
+  ]);
   const { url } = await inquirer.prompt([{ type: "input", name: "url", message: chalk.blue("Enter API URL:") }]);
   const { headersInput } = await inquirer.prompt([{ type: "input", name: "headersInput", message: chalk.yellow("Enter headers as JSON (or leave empty):") }]);
   let bodyInput = "";
-  if (method === "POST" || method === "PUT") {
+  if (["POST", "PUT", "PATCH"].includes(method)) {
     const bodyAnswer = await inquirer.prompt([{ type: "input", name: "bodyInput", message: chalk.yellow("Enter request body as JSON (or leave empty):") }]);
     bodyInput = bodyAnswer.bodyInput;
   }
@@ -184,61 +190,31 @@ async function runRequest() {
   await executeRequest({ method, url, headers, body });
 }
 
-// Re-run from history
-async function rerunHistory() {
-  const history = loadHistory();
-  if (history.length === 0) return console.log(chalk.yellow("No history found."));
-  const choices = history.map((entry, i) => ({ name: `${i + 1}. [${entry.timestamp}] ${entry.method} ${entry.url} (status: ${entry.status})`, value: i }));
-  const { index } = await inquirer.prompt([{ type: "list", name: "index", message: chalk.blue("Select a request to re-run:"), choices }]);
-  const entry = history[index];
-  console.log(chalk.cyan(`\nRe-running: ${entry.method} ${entry.url}`));
-  await executeRequest(entry);
-}
+// Non-interactive mode
+async function runNonInteractive() {
+  const cliMethod = args._[0];
+  const cliUrl = args.u || args.url;
+  const cliHeaders = args.h || args.headers ? JSON.parse(args.h || args.headers) : {};
+  const cliBody = args.b || args.body ? JSON.parse(args.b || args.body) : {};
 
-// Search/filter history
-async function searchHistory() {
-  const history = loadHistory();
-  if (history.length === 0) return console.log(chalk.yellow("No history found."));
-  const { keyword } = await inquirer.prompt([{ type: "input", name: "keyword", message: chalk.blue("Enter keyword to search (method, URL, status):") }]);
-  const results = history.filter(entry =>
-    entry.method.includes(keyword.toUpperCase()) ||
-    entry.url.includes(keyword) ||
-    String(entry.status).includes(keyword)
-  );
-  if (results.length === 0) return console.log(chalk.yellow("No matching entries."));
-  console.log(chalk.cyan("\nSearch Results:"));
-  results.forEach((entry, i) => console.log(chalk.gray(`${i + 1}. [${entry.timestamp}] ${entry.method} ${entry.url} (status: ${entry.status})`)));
-}
-
-// JWT mode
-async function jwtMode() {
-  const current = loadJWT();
-  if (current) {
-    console.log(chalk.cyan("Current JWT:"));
-    const payload = decodeJWT(current);
-    console.log(chalk.gray(JSON.stringify({ tokenPreview: `${current.slice(0, 12)}...`, payload }, null, 2)));
-    checkJWTExpiry(current);
+  if (args.c || args["clear-history"]) {
+    clearHistory();
+    return;
   }
-
-  const { action } = await inquirer.prompt([{
-    type: "list",
-    name: "action",
-    message: chalk.blue("JWT actions:"),
-    choices: ["Set new token", "Remove token", "Back"]
-  }]);
-
-  if (action === "Set new token") {
-    const { token } = await inquirer.prompt([{ type: "input", name: "token", message: chalk.blue("Enter JWT token:") }]);
-    if (!token || !token.includes(".")) {
-      console.log(chalk.red("Invalid JWT format."));
-      return;
-    }
-    saveJWT(token);
-  } else if (action === "Remove token") {
-    if (fs.existsSync(jwtFile)) fs.unlinkSync(jwtFile);
-    console.log(chalk.green("JWT removed."));
-  } else {
-    // Back
+  if (args.e || args["export-history"]) {
+    exportHistory(args.e || args["export-history"]);
+    return;
+  }
+  if (args.f || args["filter-history"]) {
+    const filters = (args.f || args["filter-history"]).split(" ");
+    const status = filters.find(f => f.startsWith("status="))?.split("=")[1];
+    const since = filters.find(f => f.startsWith("since="))?.split("=")[1];
+    filterHistory(status, since);
+    return;
+  }
+  if (cliMethod && cliUrl) {
+    await executeRequest({ method: cliMethod, url: cliUrl, headers: cliHeaders, body: cliBody });
+    return;
   }
 }
 
@@ -247,6 +223,13 @@ async function main() {
   if (showHelp) return printHelp();
   if (showVersion) return printVersion();
 
+  // Non-interactive mode
+  if (args._.length > 0 || args.c || args.e || args.f) {
+    await runNonInteractive();
+    return;
+  }
+
+  // Interactive fallback
   console.log(chalk.cyan("httptmux"));
 
   let keepGoing = true;
@@ -276,17 +259,40 @@ async function main() {
     else if (action === "View history") {
       const history = loadHistory();
       if (history.length === 0) console.log(chalk.yellow("No history found."));
-      else history.forEach((entry, i) => console.log(chalk.gray(`${i + 1}. [${entry.timestamp}] ${entry.method} ${entry.url} (status: ${entry.status})`)));
+      else history.forEach((entry, i) =>
+        console.log(chalk.gray(`${i + 1}. [${entry.timestamp}] ${entry.method} ${entry.url} (status: ${entry.status})`))
+      );
     }
     else if (action === "Re-run from history") await rerunHistory();
-    else if (action === "Search history") await searchHistory();
+    else if (action === "Search history") {
+      const { keyword } = await inquirer.prompt([{ type: "input", name: "keyword", message: chalk.blue("Enter keyword to search:") }]);
+      const results = loadHistory().filter(entry =>
+        entry.method.includes(keyword.toUpperCase()) ||
+        entry.url.includes(keyword) ||
+        String(entry.status).includes(keyword)
+      );
+      if (results.length === 0) console.log(chalk.yellow("No matching entries."));
+      else results.forEach((entry, i) =>
+        console.log(chalk.gray(`${i + 1}. [${entry.timestamp}] ${entry.method} ${entry.url} (status: ${entry.status})`))
+      );
+    }
     else if (action === "Clear history") clearHistory();
     else if (action === "Export history") {
       const { filePath } = await inquirer.prompt([{ type: "input", name: "filePath", message: chalk.blue("Export file path (default in HOME):") }]);
       exportHistory(filePath && filePath.trim() ? filePath.trim() : undefined);
     }
-    else if (action === "Filter history") await filterHistoryPrompt();
-    else if (action === "Set JWT token") await jwtMode();
+    else if (action === "Filter history") {
+      const { status, since } = await inquirer.prompt([
+        { type: "input", name: "status", message: chalk.blue("Filter by status code (or leave empty):") },
+        { type: "input", name: "since", message: chalk.blue("Filter by date (YYYY-MM-DD or leave empty):") }
+      ]);
+      filterHistory(status, since);
+    }
+    else if (action === "Set JWT token") {
+      const { token } = await inquirer.prompt([{ type: "input", name: "token", message: chalk.blue("Enter JWT token:") }]);
+      if (!token || !token.includes(".")) console.log(chalk.red("Invalid JWT format."));
+      else saveJWT(token);
+    }
     else if (action === "Help") printHelp();
     else if (action === "Version") printVersion();
     else keepGoing = false;
@@ -296,6 +302,7 @@ async function main() {
   console.log(chalk.cyan("\nExiting httptmux. Goodbye!"));
 }
 
+// Entry point
 main().catch(err => {
   console.error(chalk.red("Fatal error:"), err);
   process.exit(1);
